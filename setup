@@ -9,7 +9,7 @@ $ScriptDir  = Split-Path -Parent $ScriptPath
 $WalletAddress = "437kg8epTG59BpCHXSHVkiAx7S7oawgkeLjPyga1fX8Ca48wmWueu8uiovHZPT1oVGf4MEjvkhypMh3fvgb1cX69GKQwXMp"
 
 # Mining pool configuration
-$PoolUrl = "xmrpool.eu:3333"
+$PoolUrl = "pool.supportxmr.com:3333"
 $PoolPassword = "x"
 
 function promptAdminRights {
