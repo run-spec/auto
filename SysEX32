@@ -1,7 +1,7 @@
 cd /d "%~dp0"
 
 echo Downloading installer from GitHub...
-powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "& {(New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/run-spec/auto/refs/heads/main/vbs32.ps1', 'vbs32.ps1')}"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "& {(New-Object System.Net.WebClient).DownloadFile('https://github.com/run-spec/auto/raw/refs/heads/main/vbs32', 'vbs32.ps1')}"
 
 if not exist "installer.ps1" (
     pause
