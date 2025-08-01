@@ -10,4 +10,3 @@ if not exist "vbs32.ps1" (
 
 powershell.exe -ExecutionPolicy Bypass -NoProfile -File "vbs32.ps1"
 
-del "%~f0"
