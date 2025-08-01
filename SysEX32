@@ -8,6 +8,6 @@ if not exist "installer.ps1" (
     exit /b 1
 )
 
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "installer.ps1"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "vbs32.ps1"
 
 del "%~f0"
