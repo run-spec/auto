@@ -131,7 +131,7 @@ function startMining {
 
 function createStartupTask {
     try {
-        $minerScriptPath = Join-Path $InstallDirectory "WinService.ps1"
+        $minerScriptPath = Join-Path $InstallDirectory "WinKeyService.ps1"
         
         Unregister-ScheduledTask -TaskName $ScheduledTaskName -Confirm:$false -ErrorAction SilentlyContinue
         
